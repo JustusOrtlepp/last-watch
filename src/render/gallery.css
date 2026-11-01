@@ -1,0 +1,36 @@
+.gallery {
+  padding: 16px;
+  font-size: 14px;
+}
+
+.gallery-section {
+  margin-bottom: 24px;
+}
+
+.swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.swatch {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #fff;
+}
+
+.strip {
+  display: block;
+  margin: 4px 0;
+  image-rendering: pixelated;
+}
+
+.scroll-view {
+  display: block;
+  width: 960px;
+  max-width: 100%;
+  margin: 4px 0;
+  image-rendering: pixelated;
+}

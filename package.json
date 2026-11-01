@@ -1,0 +1,39 @@
+{
+  "name": "last-watch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Tauren Runner - an endless runner fan parody (see SPEC.md)",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --quiet",
+    "check": "npm run typecheck && npm run lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run --reporter=dot --dir tests/unit",
+    "test:quick": "vitest run --reporter=dot --dir tests/unit",
+    "test:art": "vitest run --reporter=dot --dir tests/unit/art",
+    "test:fair": "node scripts/fair.mjs",
+    "test:fair:dev": "node scripts/fair.mjs 50",
+    "test:e2e": "playwright test --reporter=line",
+    "gallery:shots": "node scripts/gallery-shots.mjs",
+    "release:check": "node scripts/release-check.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.6",
+    "eslint": "^10.14.0",
+    "prettier": "^3.9.10",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

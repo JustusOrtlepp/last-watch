@@ -1,0 +1,465 @@
+:root {
+  --panel-bg: #140a06;
+  --text: #f6e7d4;
+  --rage: #ff6a55;
+  --button-bg: #f6e7d4;
+  --button-text: #140a06;
+  --focus: #ffd27a;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  color: #fff;
+  font-family: system-ui, sans-serif;
+}
+
+#app {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+/* Taller than the canvas on narrow screens so the overlay panels always fit. */
+.game-frame {
+  position: relative;
+  min-height: 320px;
+  container-type: inline-size;
+}
+
+.game-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 960 / 270;
+  image-rendering: pixelated;
+  touch-action: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* HUD: top-right counters on a dark backing panel (SPEC 9.2, 10.4). */
+.hud {
+  position: absolute;
+  top: 2cqw;
+  right: 2cqw;
+  display: flex;
+  gap: 2.4cqw;
+  padding: 0.6cqw 1.6cqw;
+  background: var(--panel-bg);
+  color: var(--text);
+  font:
+    bold clamp(12px, 2.4cqw, 24px) ui-monospace,
+    'Courier New',
+    monospace;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  user-select: none;
+}
+
+.hud-rage {
+  color: var(--rage);
+}
+
+/* Music on/off: top-left on the dark HUD backing; the overlay panels start below it. */
+.sound-toggle {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 1;
+  min-height: 40px;
+  padding: 0 12px;
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 2px solid var(--text);
+  font:
+    bold 13px ui-monospace,
+    'Courier New',
+    monospace;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.sound-toggle[aria-pressed='false'] {
+  color: var(--rage);
+  border-color: var(--rage);
+}
+
+/* Error text, top-centre (SPEC 5.2): red on the dark HUD backing, one message at a time. */
+.hud-error {
+  position: absolute;
+  top: 2cqw;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 60cqw;
+  padding: 0.6cqw 1.6cqw;
+  background: var(--panel-bg);
+  color: var(--rage);
+  font:
+    bold clamp(12px, 2.4cqw, 24px) ui-monospace,
+    'Courier New',
+    monospace;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Tutorial hint (SPEC 7.2): parchment tooltip below the error line; never blocks input. */
+.hud-hint {
+  position: absolute;
+  top: 12cqw;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 70cqw;
+  padding: 0.6cqw 1.6cqw;
+  background: #f6e7d4;
+  color: #3a1d0e;
+  border: 2px solid #8a5a2b;
+  font:
+    bold clamp(12px, 2.2cqw, 22px) ui-monospace,
+    'Courier New',
+    monospace;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+}
+
+.hud-hint[hidden] {
+  display: none;
+}
+
+/* "Ding!" level-up toast (SPEC 8): gold on the dark panel, cosmetic (aria-hidden), never blocks input. */
+.hud-toast {
+  position: absolute;
+  top: 18cqw;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.6cqw 2.4cqw;
+  background: var(--panel-bg);
+  color: var(--focus);
+  border: 2px solid var(--focus);
+  font:
+    bold clamp(12px, 2.6cqw, 26px) ui-monospace,
+    'Courier New',
+    monospace;
+  letter-spacing: 0.08em;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+  animation: toast-in 250ms ease-out;
+}
+
+.hud-toast-title {
+  font-size: 0.7em;
+  text-transform: uppercase;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -0.8cqw);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.hud-rage.pulse {
+  transform-origin: right center;
+  animation: rage-pulse 220ms ease-out;
+}
+
+@keyframes rage-pulse {
+  from {
+    transform: scale(1.25);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Reduced motion (SPEC 10.4): the toast just appears, the counter does not pulse. */
+#app[data-reduced-motion='true'] .hud-toast,
+#app[data-reduced-motion='true'] .hud-rage.pulse {
+  animation: none;
+}
+
+/* Action bar (SPEC 9.2): below the canvas so it never hides obstacles; 68 px buttons. */
+.action-bar {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 0;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+}
+
+#app[data-screen='title'] .action-bar,
+#app[data-screen='gameover'] .action-bar {
+  visibility: hidden;
+}
+
+#app[data-screen='running'] .action-bar .action {
+  pointer-events: auto;
+}
+
+.action {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--button-bg);
+  border: 2px solid var(--text);
+  outline-offset: 2px;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.action-icon {
+  position: absolute;
+  inset: 2px;
+  width: 60px;
+  height: 60px;
+  image-rendering: pixelated;
+}
+
+/* Red tint: unusable or no valid Charge target in range. */
+.action[data-tint='true']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(190, 30, 30, 0.6);
+}
+
+.action[data-lit='true'] {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+/* Clockwise cooldown sweep: the dark part shrinks from 12 o'clock as the cooldown elapses. */
+.action-sweep {
+  position: absolute;
+  inset: 0;
+  --elapsed: 100%;
+  background: conic-gradient(transparent var(--elapsed), rgba(20, 10, 6, 0.72) 0);
+  pointer-events: none;
+}
+
+.action-time {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  font:
+    bold 22px ui-monospace,
+    'Courier New',
+    monospace;
+  text-shadow:
+    -1px -1px 0 var(--panel-bg),
+    1px -1px 0 var(--panel-bg),
+    -1px 1px 0 var(--panel-bg),
+    1px 1px 0 var(--panel-bg);
+  pointer-events: none;
+}
+
+.action-key {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: 1px 4px;
+  background: var(--panel-bg);
+  color: var(--text);
+  font:
+    bold 12px ui-monospace,
+    'Courier New',
+    monospace;
+  pointer-events: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 48px; /* clears the HUD */
+  box-sizing: border-box;
+  font-size: 15px;
+}
+
+.panel {
+  max-width: min(92%, 640px);
+  padding: 0.9em 2em;
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 2px solid var(--text);
+  text-align: center;
+}
+
+.panel h1,
+.panel h2 {
+  margin: 0 0 0.6em;
+  font-size: 2em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.panel p {
+  margin: 0.3em 0;
+}
+
+.panel .final {
+  color: var(--rage);
+  font:
+    bold 1.8em ui-monospace,
+    'Courier New',
+    monospace;
+}
+
+.panel .breakdown {
+  font-size: 0.9em;
+}
+
+.panel .best {
+  font:
+    bold 1.1em ui-monospace,
+    'Courier New',
+    monospace;
+}
+
+.panel .badge {
+  display: block;
+  width: fit-content;
+  margin: 0.4em auto;
+  padding: 0.1em 0.7em;
+  background: var(--rage);
+  color: var(--panel-bg);
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.panel .controls {
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+button.primary {
+  min-width: 48px;
+  min-height: 48px;
+  margin-top: 0.8em;
+  padding: 0.6em 1.4em;
+  background: var(--button-bg);
+  color: var(--button-text);
+  border: 0;
+  font:
+    bold 1em system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+button.primary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+button.secondary {
+  min-width: 48px;
+  min-height: 44px;
+  margin-top: 0.6em;
+  padding: 0.4em 1.1em;
+  background: transparent;
+  color: var(--text);
+  border: 2px solid var(--text);
+  font:
+    bold 0.9em system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+/* Settings (SPEC 9.1): compact so the panel fits the 320 px frame; scrolls on very small screens. */
+#screen-settings {
+  overflow-y: auto;
+}
+
+.panel.settings {
+  padding: 0.6em 1.6em;
+  text-align: left;
+}
+
+.panel.settings h2 {
+  margin-bottom: 0.3em;
+  text-align: center;
+  font-size: 1.5em;
+}
+
+.panel.settings button.primary {
+  display: block;
+  margin: 0.5em auto 0.2em;
+  min-height: 44px;
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.setting input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--focus);
+}
+
+.setting-reset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.8em;
+}
+
+.reset-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.6em;
+}
+
+.reset-confirm span {
+  margin-top: 0.6em;
+}
+
+button:focus-visible,
+.setting input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+#app[data-screen='settings'] .action-bar {
+  visibility: hidden;
+}

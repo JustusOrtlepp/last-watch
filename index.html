@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Tauren Runner</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <div id="app" data-screen="title">
+      <div id="frame" class="game-frame">
+        <canvas id="game" class="game-canvas" role="img" aria-label="Tauren Runner game"></canvas>
+
+        <div class="hud" aria-hidden="true">
+          <span class="hud-best">BEST <span id="hud-best">00000</span></span>
+          <span id="hud-rage-counter" class="hud-rage">RAGE <span id="hud-rage">00000</span></span>
+        </div>
+
+        <button
+          id="btn-sound"
+          type="button"
+          class="sound-toggle"
+          aria-pressed="true"
+          aria-label="Sound"
+          title="Sound on/off (M)"
+        >
+          <span id="sound-label">Sound: On</span>
+        </button>
+
+        <div id="hud-error" class="hud-error" aria-hidden="true" hidden></div>
+        <div id="hud-hint" class="hud-hint" role="status" hidden></div>
+        <div id="hud-toast" class="hud-toast" aria-hidden="true" hidden>
+          <span class="hud-toast-title">Ding!</span>
+          <span id="hud-toast-level" class="hud-toast-level"></span>
+        </div>
+
+        <div id="action-bar" class="action-bar" role="group" aria-label="Abilities">
+          <button
+            id="btn-jump"
+            type="button"
+            class="action"
+            data-ability="jump"
+            aria-label="Jump (Space)"
+            tabindex="-1"
+          >
+            <canvas class="action-icon" width="32" height="32"></canvas>
+            <span class="action-sweep"></span>
+            <span class="action-time"></span>
+            <span class="action-key">Space</span>
+          </button>
+          <button
+            id="btn-charge"
+            type="button"
+            class="action"
+            data-ability="charge"
+            aria-label="Charge (Q)"
+            tabindex="-1"
+          >
+            <canvas class="action-icon" width="32" height="32"></canvas>
+            <span class="action-sweep"></span>
+            <span class="action-time"></span>
+            <span class="action-key">Q</span>
+          </button>
+          <button
+            id="btn-stomp"
+            type="button"
+            class="action"
+            data-ability="stomp"
+            aria-label="War Stomp (E)"
+            tabindex="-1"
+          >
+            <canvas class="action-icon" width="32" height="32"></canvas>
+            <span class="action-sweep"></span>
+            <span class="action-time"></span>
+            <span class="action-key">E</span>
+          </button>
+        </div>
+
+        <section id="screen-title" class="overlay" aria-labelledby="title-heading">
+          <div class="panel">
+            <h1 id="title-heading">Tauren Runner</h1>
+            <button id="btn-start" type="button" class="primary">
+              Press Space / Tap to begin your adventure
+            </button>
+            <p class="controls">
+              Jump: Space, W or Up (hold to jump higher; tap the left of the screen on touch)<br />
+              Charge: Q or 1 &middot; War Stomp: E or 2 (or the buttons below the game)<br />
+              Fast fall: Down or S (swipe down on touch) &middot; Pause: P or Esc
+            </p>
+            <button id="btn-settings" type="button" class="secondary">Settings</button>
+          </div>
+        </section>
+
+        <section id="screen-settings" class="overlay" aria-labelledby="settings-heading" hidden>
+          <div class="panel settings">
+            <h2 id="settings-heading">Settings</h2>
+            <label class="setting">
+              <input id="set-muted" type="checkbox" />
+              <span>Mute sound (music and effects)</span>
+            </label>
+            <label class="setting">
+              <input id="set-motion" type="checkbox" />
+              <span>Reduced motion (no screen shake or drifting motes)</span>
+            </label>
+            <label class="setting">
+              <input id="set-hints" type="checkbox" />
+              <span>Show tutorial hints</span>
+            </label>
+            <div class="setting-reset">
+              <button id="btn-reset-best" type="button" class="secondary">Reset best Rage</button>
+              <div
+                id="reset-confirm"
+                class="reset-confirm"
+                role="group"
+                aria-label="Confirm reset"
+                hidden
+              >
+                <span>Reset your best Rage to 0?</span>
+                <button id="btn-reset-yes" type="button" class="secondary">Yes, reset</button>
+                <button id="btn-reset-no" type="button" class="secondary">Cancel</button>
+              </div>
+            </div>
+            <button id="btn-settings-back" type="button" class="primary">Back (Esc)</button>
+          </div>
+        </section>
+
+        <section id="screen-paused" class="overlay" aria-labelledby="paused-heading" hidden>
+          <div class="panel">
+            <h2 id="paused-heading">Paused</h2>
+            <button id="btn-resume" type="button" class="primary">Resume (P / Esc / tap)</button>
+          </div>
+        </section>
+
+        <section id="screen-gameover" class="overlay" aria-labelledby="gameover-heading" hidden>
+          <div class="panel">
+            <h2 id="gameover-heading">You have died.</h2>
+            <p class="final">RAGE <span id="go-rage">00000</span></p>
+            <p class="breakdown">
+              Distance <span id="go-distance">0</span> &middot; Combat <span id="go-combat">0</span>
+            </p>
+            <p class="best">BEST <span id="go-best">00000</span></p>
+            <p id="go-record" class="badge" hidden>New record!</p>
+            <button id="btn-release" type="button" class="primary" disabled>Release Spirit</button>
+          </div>
+        </section>
+
+        <div id="announce" class="sr-only" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

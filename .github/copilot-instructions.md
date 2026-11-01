@@ -1,0 +1,8 @@
+- Process: follow ORCHESTRATION.md section 1. Product: SPEC.md.
+- Start: read STATE.md, then only the SPEC sections listed for the current package in ORCHESTRATION.md section 3.
+- One package per session; stop after updating STATE.md and committing.
+- Bounded output only: use the npm scripts (check, test:quick, test, test:art, test:fair:dev, test:fair, test:e2e).
+- Never read sprite grid files in full, node_modules, dist, or lock files.
+- Three-strike rule: same failure 3 times -> write diagnosis to STATE.md and stop.
+- Commits: Conventional Commits without chore:, always git commit -s, stage files by name.
+- No push, merge, PR, or deploy without explicit human approval.

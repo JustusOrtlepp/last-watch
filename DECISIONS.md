@@ -1,0 +1,140 @@
+# DECISIONS
+
+Append-only log of decisions made during execution. One entry per decision: date, package, decision, reason.
+
+## P0
+
+- **Dev/preview ports are 5273/4273** (not Vite defaults 5173/4173). Port 5173 on the author's machine answers HTTP from a process not visible to the OS tooling, which made Playwright refuse to start its web server. `strictPort` is on, so a clash fails loudly. `gallery:shots` uses 5180.
+- **Extra dev dependencies**: `typescript-eslint`, `@eslint/js`, `@types/node`. Needed for ESLint 9 flat config with type-aware TypeScript rules and for Node types in scripts and Playwright config. No runtime dependencies.
+- **Vitest `include` is `**/*.test.ts`**, relative to the `--dir` given by each npm script (`tests/unit`, `tests/fairness`). `test:fair` and `test:fair:dev` exit non-zero until the fairness test exists (P4b), by design.
+- **Fairness seeds via `scripts/fair.mjs`** which sets `FAIRNESS_SEEDS`, because inline `VAR=x cmd` env syntax is not portable to Windows.
+- **Favicon**: `<link rel="icon" href="data:,">` so the e2e "no console errors" check is not broken by a `/favicon.ico` 404.
+- **Gallery is dev-only**: loaded with a dynamic import guarded by `import.meta.env.DEV`; verified absent from the production bundle.
+- **`npm audit`**: 11 moderate findings, all in the dev-only `typescript-eslint` / `minimatch` chain. Not shipped, not fixed (a fix needs `--force` and breaking upgrades).
+- **Fixture sprite** (`src/render/art/sprites/fixture.ts` and its `SHEETS` entry) exists only to exercise the harness; delete in P1a.
+- **Local Node is 24.5.0**; `engines` targets Node 22 (Vercel). No Node 24-only APIs used.
+
+## P1a
+
+- **2x art-pixel scale for all sprites** (2026-11-01). Sprites are authored at half resolution (Tauren 32 x 32) and upscaled 2x by `upscale()` in `compose.ts`. Every SPEC 4.4 frame size is even, so all later sheets can follow; gives one consistent, chunky pixel scale (no single-pixel noise). Tauren test enforces 2x2 blocks.
+- **Run stride = 6 px per run frame** (planted hoof moves back 3 art px). No sliding feet requires the renderer (P2b) to advance run frames at `scrollSpeed / 6` frames per second; the sheet's `fps: 12` is the gallery default only.
+- **`compose()` rejects layers with rows of different widths** (throws `RangeError`) so miscounted grid rows fail loudly in `test:art`.
+- **Tauren death sequence**: stagger (X eye) -> knees buckle -> kneel, axe dropped -> lying with axe beside him. Charge uses its own upper body (head lowered, horns forward).
+- **Gallery playback fix**: rAF timestamps can precede `performance.now()` captured at setup, which produced frame index -1 (console errors). Elapsed time is clamped to 0.
+- Fixture sprite deleted; gallery e2e now asserts `[data-sheet="tauren"]`. Atlas unit test uses max width 200 (64 is narrower than a 64 px frame plus padding).
+
+## M1 art sign-off
+
+- **All M1 art signed off by the human (2026-11-01):** every sprite, frame, effect, ability icon and background layer in SPEC 4.4, including the P1e feedback rounds 1-2 (Tauren double-bladed axe). Art tests green (92). From now on art changes only with explicit human approval, recorded here.
+- Merge of `m1-art` to `main` was NOT yet approved at sign-off (R27); `m2-trex` was branched from `m1-art` so that P2b had the signed-off atlas.
+- **RESOLVED (2026-11-01): `m1-art` is merged into `main`** (verified with `git merge-base --is-ancestor m1-art main`; `m0-scaffold`, `m2-trex` and `m3-abilities` are merged too). No merge approval is pending; later sessions must not ask for it again.
+
+## P2a
+
+- **Player coordinates:** `player.x` is the hitbox CENTRE (home x = 120, hitbox x 100..140); `feetY` is the hitbox bottom in screen coordinates (`groundY` when grounded), `vy` positive downwards. Obstacle `x` is the LEFT edge, bottom on the ground. The P2b renderer must place the 64 x 64 sprite centred on `player.x` with its feet at `feetY`.
+- **Exact integration for jump arcs** (`y += v*dt + g*dt^2/2`), so the peak is 140.1 px at 60 Hz regardless of tick alignment. A short hop (key released within ~3 ticks) peaks at ~71 px.
+- **Input is held-state per tick** (`SimInput {jump, down}`); the sim derives press and release edges. A buffered jump taken after the key was already released becomes a short hop.
+- **Jump needs `Running` (or `Airborne` inside the coyote window).** Coyote only matters after leaving the ground without jumping; P3a decides whether `Recovering` may jump.
+- **Death freezes the sim:** `stepWorld` is a no-op once the player is `Dead`. The renderer owns the death-animation clock.
+- **Provisional spawner** (`src/sim/spawner.ts`): single obstacles of any kind, edge gap = `max(gapMinPx, speed * (airTime + reactionSec))` times 1..1.5 jitter, first obstacle after 600 px. Extra config keys `spawn.firstGapPx` and `spawn.gapJitter` (not in SPEC 11). P4b replaces it with encounters, tiers and fairness rules.
+- **Stepper** (`src/sim/loop.ts`): clamps each frame to `maxFrameDeltaMs` and carries the remainder; `world.tick` is the only clock (speed = f(tick)).
+- **Hash** (`hashWorld`) is 32-bit FNV-1a over the float64 bytes of all sim state (including RNG state and obstacle list).
+- `m2-trex` is branched from `m1-art`, not `main` (see M1 sign-off above): `m1-art` is not merged yet.
+## P2b
+
+- **Module layout follows SPEC 4.2:** `src/game.ts` (wiring, rAF loop, screen state machine), `src/input/input.ts`, `src/ui/screens.ts`, `src/storage/persistence.ts`, `src/render/{scene,animation,hud}.ts`. Screens and HUD are static DOM in `index.html` (CSP-safe: no inline styles; colours are CSS variables, contrast is unit-tested against `src/style.css`).
+- **Rendering:** player drawn centred on `player.x`, feet at `feetY`; run frame = `floor(scroll / 6) % 6` (speed-driven, DECISIONS P1a); jump frame 0 while rising, 1 otherwise; death plays once and holds. Between 60 Hz ticks, scroll, obstacles and the airborne player are extrapolated by the accumulator remainder (visual only, never fed back into the sim). Obstacle variant = `id % variantCount`.
+- **Input:** held-state per tick plus a one-tick latch so a press shorter than a frame still jumps. Starting a run with Space clears held input (no instant jump). Pointer events are bound to the canvas only (left 60% = jump, drag down 24 px = fast-fall); overlays handle their own clicks. Charge/Stomp/Mute/Confirm are mapped but only Confirm and Pause are acted on until P3/P5b.
+- **Game over:** overlay shows immediately; "Release Spirit" is disabled for 500 ms (`CONFIG.ui.releaseDebounceMs`, new key), then enabled and focused. Space/Enter restart only after the debounce. Game over is announced through an `aria-live` region; the HUD is `aria-hidden`.
+- **Layout:** `.game-frame` has `min-height: 320px` (taller than the 270 px canvas at desktop width) so overlay panels fit at narrow widths; the panel starts below the HUD. Font sizes in overlays are fixed px, not tied to canvas width.
+- **Persistence:** `highscore` is a plain decimal integer in [0, 1e9]; `settings` is JSON with per-field boolean fallback. Settings load/save exists but has no UI until P5b.
+- **Debug hooks** (dev server only, `?debug=1`): `seed=<int>` (first run), `spawn=immediate` (one thornbush at x = 240, spawner off) or `spawn=none`; the spawn override applies to the first run only so "Release Spirit" starts a normal run. `#app` exposes `data-screen` and `data-run` for tests.
+- **Deferred:** action bar and its mobile-button e2e check (P3b), settings button on the title and the settings screen (P5b), title controls text lists only Jump/fast-fall/Pause until Charge and War Stomp exist.
+## P3a
+
+- **Enemy data and a minimal enemy entity landed in P3a** because Charge and War Stomp need targets: `ENEMIES` table in `content/entities.ts` (SPEC 6.2 hitboxes, own speeds, 6.4 kill/trample Rage; harpy heights are the kinds `harpyLow|harpyMid|harpyHigh`) and `sim/enemies.ts` (walk toward the player, stun timer, defeated fade). No spawning, behaviours (arrows, telegraph, harpy fall), trample or enemy art wiring: those stay in P4a/P4b. `addEnemy()` places enemies by hand (tests).
+- **High harpy is neither stompable nor chargeable** via flags `stompable` / `chargeable` (SPEC 6.2 says "out of reach"; a plain circle test would hit it at h = 90 < radius 160). With no valid target Charge reports "Out of range."
+- **Input:** `SimInput` gains optional `charge` / `stomp` (held state; the sim derives press edges like jump; absent = not held). The input controller latches them for one tick like jump. A held key never re-triggers.
+- **Tick order:** cooldown timers, `updatePlayer` (jump), ability presses, scroll obstacles and enemies, charge dash step, spawner, collision. Jump wins over an ability pressed in the same tick (the ability then sees an airborne player).
+- **Airborne ability presses are silently ignored** (SPEC lists no error for it); cooldown and GCD are checked first, so a press on cooldown still reports "Ability is not ready yet."
+- **Error priority for Charge:** valid target > "Target too close." (any chargeable enemy in [0, 60)) > "Immune." (only a Kodo within 420) > "Out of range." Enemies behind the player are ignored. Throttling (same error once per 0.5 s) happens in the sim; `AbilityError` events are only emitted when not throttled. `CONFIG.errors.displayMs` (1.2 s) is for P3b.
+- **Charge dash:** 0.18 s (11 ticks), the player aims at where the target will be at dash end (known velocity), so motion is smooth and never backwards; x is capped at `maxX`. Arrival defeats the target (+25 hit surge and kill Rage as separate `RageSurge` events). Defeated enemies stay in the sim for `CONFIG.enemy.defeatFadeMs` (500 ms), knocked forward at `knockbackSpeed` (300 px/s) while fading (both new config keys, not in SPEC 11); presentation reads them.
+- **Recovering may jump and use abilities** (resolves the P2a question). `Recovering` is just the grounded label while `x > homeX`; the drift at 160 px/s runs in every state except `Charging`/`Dead`, including in the air and during the stomp lock.
+- **Stomp lock** (0.15 s, 9 ticks) blocks jumping; a jump pressed in the last 100 ms of it fires when the lock ends (normal buffer).
+- **Collision after a dash is normal:** an unstunned hazard overlapping the player when the dash ends kills. Stunned or defeated enemies are harmless; knocking aside and trample Rage are P4a.
+- **Events added:** `StompUsed`, `ChargeStarted`, `ChargeHit`, `EnemyStunned`, `EnemyDefeated`, `RageSurge`, `AbilityError`. `PlayerDied.cause` may now be an enemy kind.
+- **Timers** use `countdown()` (`sim/timers.ts`, 1e-6 ms slack) so N whole ticks reach exactly zero (500 ms GCD = 30 ticks, 10 s = 600 ticks).
+
+## P3b
+
+- **Action bar sits below the canvas** (HTML buttons, not drawn on the canvas) so it never covers obstacles: 68 px buttons (48 px minimum on 390 px wide phones), hidden on title/game over, pointer events only while running; buttons never take focus. They use `input.pressButton/releaseButton` (same latch as keys). Icons come from the icons sheet.
+- **Sweep and tint:** the sweep follows the later of the ability's own cooldown and the shared GCD; the seconds text shows only the own cooldown (whole seconds from 2 s, one decimal below, rounded up). Jump is never tinted; Charge is tinted with no valid target or while airborne, War Stomp while airborne (data attributes `data-tint|lit|cooling`, always present). Charge is lit (border) when a valid target is in range. All derived by the pure `actionBarState(world)`.
+- **Error text** is a DOM line over the canvas (`#hud-error`), one at a time, 1.2 s, a new error restarts the timer; cleared on run start and death. The error blip sound is deferred to P5b.
+- **Floating combat text** ("Stunned", "+5 Rage", "+75 Rage", "Immune") rises 28 px over 0.8 s while fading; scrolls with the ground. A Charge hit and the kill surge merge into one "+N Rage" (events of one frame at the same position). Stomp shockwave, stun swirl, Charge dust (every 50 ms while dashing), hit spark and red target marker are drawn by `render/effects.ts` and `scene.ts`; screen shake is deferred to P5a.
+- **Minimal enemy rendering added early** (walk loop, stunned pose, defeated fade, kodo kneel); P4a still owns behaviours. Tauren stomp/charge frames follow lock/dash progress.
+- **Debug hook** `spawn=enemy|kodo` places a Quilboar / Kodo at x = 800 (enters Charge range after about 0.7 s).
+## P4a
+
+- **Enemy behaviours** live in `sim/enemies.ts` (movement, stun, harpy fall, telegraph helpers) and `sim/hazards.ts` (arrows, archer, fall Rage, trample). `World` gains `arrows`; all new state is in `hashWorld`.
+- **Trample:** a stunned, not-yet-defeated enemy that overlaps the player's hitbox is knocked aside (defeated fade) and awards its trample Rage once (source `trample`, event `EnemyDefeated` cause `trample`). Not applied while the player is `Charging` (the dash target must still be hit by the Charge itself, +25 plus kill Rage). Jumping clear of a stunned enemy awards nothing.
+- **Stunned mid harpy** falls under `CONFIG.enemy.fallGravity` (2400) and is defeated on landing for 50 (event cause `fall`). A defeated mid harpy (Charge or trample in the air) keeps falling without extra Rage. Low and high harpies do not fall.
+- **Centaur Archer:** fires when 200-700 px ahead (player front edge to its back edge) and not stunned/defeated, the first shot as soon as it enters the zone, then every 1.6 s (`fireMs` counts down while active). Arrow spawns at the archer's left edge, flies at ground speed + 300, 20 x 4 at h = 20; kills the player (cause `arrow`) unless `Charging`; unaffected by War Stomp; culled off the left edge.
+- **Plainstrider telegraph:** the spawner places it at `telegraphX(kind, speed)` (screen width + 1 s of its on-screen travel). Enemies may now wait off-screen right (the old upper cull is gone); `isTelegraphing` drives a dust cloud (charge-dust frames) on the right edge. Wiring into the spawner is P4b.
+- **Kodo physics check:** a test sweeps every full-jump timing (0-100 ticks) against a Kodo and none clears it (flight above 120 px lasts 0.26 s; the 168 px overlap takes 0.42 s). Stun-and-trample is the only way through.
+- **New tunables** in `CONFIG.enemy` (not in SPEC 11): `telegraphSec`, `fallGravity`, `arrowIntervalMs`, `shootMinRange`, `shootMaxRange`.
+- **Rendering:** arrows drawn from the arrow sheet, centaur plays `shoot` for the frames after a shot, harpy y follows `lift`.
+- **SPEC conflict (SETTLED 2026-11-01, human: keep as implemented):** SPEC 6.2 says Jump is "no" for the mid and high harpy, but with SPEC 5.2 / 6.2 numbers a perfectly timed full jump clears both (mid: box must be above 78 px for 0.455 s, overlap lasts 0.18 s; high: above 118 px for 0.27 s vs 0.18 s). Decision: the physics result stands; the SPEC 6.2 Jump column for harpies is design intent (not a reliable answer), not a guarantee. Hitboxes and heights are unchanged; the spawner and bot keep treating the mid harpy as Charge/Stomp-only; a test documents the jump.
+
+## P4b
+
+- **Time-domain planner** (`sim/spawner.ts`, `sim/travel.ts`): hazards are planned as arrival ticks and inverted to spawn ticks, so enemy walking, the Plainstrider dust-cloud lead, the archer's arrow flight and the speed ramp are all predicted exactly (a test checks the prediction against a running world). One encounter is planned when the queue empties; its items spawn at their own ticks.
+- **Rule 1** is a floor (`minGap`); placement uses a larger "comfort" gap: a full jump plus `reactionSec` of scroll, times `CONFIG.spawn.gapMult` (`tight` 1, `normal` 1.25, `wide` 1.6) with random jitter between encounters. The gap is the ground scroll between two arrivals minus the earlier hazard's width; the archer counts by its arrow for the later hazard and by its body for the earlier one.
+- **Rule 2** uses an ability ledger that assumes the player uses each ability no later than needed (at the hazard's arrival): Kodo needs War Stomp ready (off cooldown, GCD free) when it enters stomp reach; the mid harpy takes Charge if it will be ready at 420 px, else Stomp. An encounter that cannot be satisfied is redrawn (6 attempts), then replaced by a lone thornbush. **Rule 3** is the `stompNext` entry of that ledger (previous stomp-required arrival + cooldown + 1 s). **Rule 4**: a high harpy gets at least the comfort gap (>= a full jump) on both sides.
+- **Intros:** the first encounter after each tier unlock with a hint is forced (a Thornbush for jump, a Quilboar for Charge, a Kodo for stomp, a mid harpy at 1800) and carries the tutorial hint; if its ability is not ready it is delayed until it is.
+- **Hints:** `HintTriggered` sim event -> `render/hint.ts` tooltip (parchment, `#hud-hint`, `CONFIG.hints.displayMs` 4.5 s, no pause). Shown once per browser: seen ids persist under `tauren-runner:v1:hints` (JSON array, parsed defensively). `Settings.showHints` (existing, no UI until P5b) turns them off.
+- **Fairness test** (`tests/fairness`): a ghost player (no input, revived after each death) lets the real world run to distanceRage 10,000 per seed; hazards are observed (arrival, stomp/charge reach) and rules 1-4 plus tier gating are checked on the observations with an independent latest-use ability model. A mutation (disabling the ability reservation) makes it fail, so it has teeth. The perfect-play autopilot (rule 5) stays in P4c.
+- **New tunables** in `CONFIG.spawn` / `CONFIG.hints` (not in SPEC 11): `clusterGapPx`, `gapMult`, `stompExtraSec`, `attempts`, `hints.displayMs`.
+- **Encounter content** is data in `content/encounters.ts` (39 encounters, 7 tiers, weights per encounter). Tier 6 packs are 2-3 hazards with at least two enemies. Thornbush clusters of 2-3 are one hazard of width `n * 24 + (n - 1) * 8`.
+- **Sim hash** now includes a spawner signature instead of the old countdown.
+- **Model note:** this package is assigned to Opus; it was run on Claude Sonnet 5.5.
+## P4c
+
+- **Autopilot** (`src/bot/autopilot.ts`, test-only): plays the real sim with perfect information. A frontier copy of the world runs 2-3 s ahead under the planned actions; when it dies, a depth-first search repairs the plan (first death -> try one action in the 60 ticks before it -> recurse; budget 600 nodes). Actions: full jump (key held past the short-hop cut-off), short hop (1 tick), Charge, War Stomp. Preference order: jump, hop, Charge, Stomp; Kodo -> Stomp first; jumps start near the apex-on-hazard tick, abilities as late as possible (matches the spawner's "no earlier than needed" ledger).
+- **Mid harpy is never fixed by a jump** (Charge, then Stomp only), following SPEC 6.2 "Jump: no" even though the physics allow a perfect jump (SPEC conflict, settled 2026-11-01: keep as implemented). The gate passes under this stricter rule, so rule 2 is validated as the SPEC intends.
+- **World copy** is a generic deep copy of plain data (`cloneWorld`); a unit test checks it shares no state (hash equality after identical stepping).
+- **Fairness gate** (`tests/fairness/autopilot.fairness.test.ts`): 1,000 seeds to distanceRage 10,000, no death; also asserts the bot really jumps (> 20 / seed), charges and stomps (> 1 / seed on average). On a death the last 27 trace lines (spawns, actions, cause) go to `.tmp/fairness-fail.txt`. Mutation check: disabling the spawner's ability reservation kills the bot on seed 2 (Kodo), so the test has teeth. No spawner change was needed.
+- **M4 merged** into `main` (local fast-forward, human-approved 2026-11-01, not pushed).
+## P5a
+
+- **Parallax in game** was already done in P2b (`drawBackground` with the ground scroll); P5a only adds a draw margin so a shaken camera never shows a gap, and the optional dust motes (SPEC 4.3).
+- **Particles** (`src/render/particles.ts`): fixed pool of 96, own seeded PRNG (the sim stays deterministic), dust colour from the palette (`groundDustSpecks`; sprites stay black). Triggers: War Stomp ground burst, Charge hit debris, small run dust behind the Tauren. Presentation-only, fed by sim events.
+- **Screen shake**: 4 px / 150 ms on War Stomp (SPEC 5.2), decaying, whole-pixel offsets, applied with a canvas translate (HUD DOM does not move). Off with reduced motion. Backing fill at identity transform (sky + ground colour) hides edges.
+- **Dust motes**: 14, drift at 0.08-0.3x ground speed with a small vertical bob; hidden with reduced motion (decorative motion). Not drawn-updated on the title (the title world never steps).
+- **"Ding!" toast** (`src/render/toast.ts` + `#hud-toast`): derived from total Rage, not a sim event; "Level N" every 1,000 Rage, "Max level reached!" from the 60th milestone; shown 2.5 s (`CONFIG.toast.displayMs`, not in SPEC 11). `aria-hidden` (SPEC 10.4: no announcements). Chime is P5b.
+- **Rage pulse** (SPEC 8, was missing): `.pulse` class on the RAGE counter for each `RageSurge`, 220 ms scale.
+- **Reduced motion** is applied via `data-reduced-motion` on `#app` (from `settings.reducedMotion`, which defaults from the media query): CSS animations off, no shake, no motes. A settings UI to change it arrives in P5b; `createParticles` takes a getter so it will follow.- **Background music (added to P5a on request, 2026-11-01)**: `src/audio/music.ts` + `src/audio/last_watch_synthwave.mp3` (1.4 MB, bundled by Vite with a hashed name, lazy-fetched after the first key/press so first load is unaffected; the 10.6 MB WAV master stays in `.tmp/`). Web Audio `AudioBufferSourceNode`, not `<audio loop>` (MP3 through `<audio>` gaps at the loop point). SPEC 4.1 says "no audio files required", which this does not contradict.
+- **Seamless loop**: both the MP3 and the WAV fade in over ~1 s and out over ~1.5 s, so a plain loop dips to about -20 dB at the seam. No long loop point exists inside the track (the arrangement evolves; envelope correlation falls from 0.96 at 1 bar to 0.2 at 22 bars). Instead each pass starts 2.4 s (one bar at 100 bpm, `CONFIG.music.overlapSec`) before the previous one ends, with an equal-power crossfade, scheduled on the audio clock 3 passes ahead. Measured seam loudness stays in the steady-state beat pattern (0 s overlap: 0.009; 1.2 s: 0.035; 2.4 s: 0.054-0.19). Not verified by ear.
+- **Music on/off**: `#btn-sound` (top-left, "Music: On/Off", `aria-pressed`) and the M key toggle `settings.muted`, persisted (SPEC 10.2). Muting fades out and suspends the AudioContext (no CPU, no sound); a muted page never downloads the track; a hidden tab is silent. `data-music` on `#app` = idle | loading | playing | off (used by e2e). P5b should reuse `settings.muted` for the synthesized SFX and may move this button into the settings screen.
+- **Licence**: provenance per the owner (2026-11-01): the track is AI-generated. Owner decision (2026-11-01): release it under CC BY-NC 4.0 (stated in README). The grant is only as good as the owner's rights in the output, which come from the generating service's terms of use and are not yet confirmed (SPEC 4.1 says no audio files are required). Confirm the service and its output terms permit this before sharing the link.
+
+## P5b
+
+- **Synthesized SFX** (`src/audio/sfx.ts`): 11 effects (jump, land, charge, impact, stomp, stun, kill, trample, error, levelUp, death) as data recipes (pitch-swept oscillators + filtered noise) played through one Web Audio context created on the first user gesture. `sfxForEvent()` maps sim events to effects; the level-up chime plays when `toast.observe()` returns true. Same-effect repeats within `CONFIG.sfx.minGapMs` (45 ms) are dropped (a War Stomp stuns several enemies at once). Gains/pitches are first-pass values, not tuned by ear.
+- **Master volume**: SPEC 10.2 says "master volume, mute persisted". Master volume is a constant (`CONFIG.sfx.volume`, `CONFIG.music.volume`); SPEC 9.1 lists no volume control on the settings screen, so only mute is persisted.
+- **Mute covers music and SFX**: one `settings.muted`, toggled by the M key, the top-left button and the settings checkbox (kept in sync). The top-left button label changed from "Music: On/Off" to "Sound: On/Off" because it now mutes both; the button itself is kept.
+- **Settings screen** (`#screen-settings`, opened by a title button, Esc or Back returns): mute, reduced motion, show tutorial hints, reset best Rage with an inline two-step confirm (real DOM, not `window.confirm`). Changes apply and persist at once: reduced motion sets `data-reduced-motion` (particles and motes already read the setting live), hints use the new `HintTooltip.setEnabled()`. The screen swallows keyboard events so Space/Enter act on the focused control, not the game. Settings is reachable from the title only (SPEC 9.1 lists it there).
+- **Accessibility** (SPEC 10.4) was already met by earlier packages (reduced motion, icon brightness + cooldown number, DOM overlays with focus rings, `role="img"` canvas, game-over-only announcements, HUD contrast); P5b adds focus rings and labels for the new controls. Contrast of the new panel text uses the existing panel colours.
+- **M5 merged** into `main` (local fast-forward, human-approved 2026-11-01, not pushed).
+
+## P6
+
+- **Bundle**: JS 24.1 KB gzip (budget 150 KB); first load (html + js + css) 27.4 KB gzip. The 1.4 MB music track is fetched lazily after the first gesture and is not part of the first load. `npm run release:check` prints the report and fails over budget.
+- **Release check** (`scripts/release-check.mjs`): built `index.html` has no inline script, style, style attribute or handler; `noindex` meta, `robots.txt`, no `eval` / `new Function`, no external origins in shipped code; `vercel.json` headers equal SPEC 13 and carry no deployment-protection keys. The first-load budget (250 KB gzip) is not in the SPEC; it is a guard derived from "< 2 s on 4G".
+- **Production e2e** (`tests/e2e/production.spec.ts`): serves `dist/` with the exact `vercel.json` headers and plays a run (music fetch, sfx, pause) asserting no console errors or CSP violations; also asserts debug hooks are absent. Needs `npm run build` first and fails loudly if `dist/` is missing.
+- **Allocation-free hot loop (SPEC 12)**: obstacle / enemy / arrow culling is in place (no per-tick arrays), `drainEvents` returns a shared frozen empty list on idle frames, and the scene view is one reused object. Behaviour and determinism are unchanged (fairness gate re-run, 1,000 seeds). Remaining short-lived allocations, left alone: collision boxes per tick, `find` closures, atlas frame-key strings per draw, the spawner's `due` list on spawn ticks.
+- **Performance** was verified by a sim-cost test (mean tick < 0.1 ms; measured far lower) and by the allocation changes, not by profiling a real 2022 Android phone. A human device check is still open.
+- **Prettier**: the repo had 27 unformatted files from earlier packages (SPEC 12 requires Prettier formatting); formatted in one `style:` commit, no logic changes (all gates re-run).
+- **README** added with controls, the friends-only / unlisted notice, scripts and the deployment checklist. It states the game is an unofficial fan work. `src/content/names.ts` from SPEC 16 does not exist (strings live in content/ui files); not changed.
+- **Open before deploy**: music is AI-generated and released by the owner as CC BY-NC 4.0 (README), but the generating service's output terms are unconfirmed (see P5a); no deployment done (R27).
+- **M6 merged** into `main` (local fast-forward, human-approved 2026-11-01, not pushed, not deployed).
+- **Public repo (2026-11-01, owner decision):** published to `JustusOrtlepp/last-watch` as a single squashed commit under the owner's personal identity (history not carried over). Package renamed `last-watch`; storage keys stay `tauren-runner:v1:*` (SPEC 10.3). Code is MIT (`LICENSE`); the music track is credited to Justus Ortlepp under CC BY-NC 4.0. The generating service's output terms remain unconfirmed.
